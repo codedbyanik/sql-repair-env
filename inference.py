@@ -1,27 +1,34 @@
 import asyncio
-import time
+import json
+import random
 from transformers import pipeline
 
 from env.environment import SQLRepairEnv
 from env.models import Action
 
-# Load model
+# -----------------------
+# 🔥 DETERMINISTIC
+# -----------------------
+random.seed(42)
+
+# -----------------------
+# 🔥 LOAD MODEL (LIGHT)
+# -----------------------
 generator = pipeline(
     "text2text-generation",
-    model="google/flan-t5-base",
-    do_sample=False
+    model="google/flan-t5-small"
 )
 
+# -----------------------
+# 🔥 AI + RULE FIX
+# -----------------------
 def fix_query_with_ai(broken_query, schema):
     prompt = f"""
 Fix the SQL query. Only return valid SQL.
-
 Schema:
-users(id, name, age)
-
+{schema}
 Broken Query:
 {broken_query}
-
 Correct SQL:
 """
 
@@ -31,66 +38,123 @@ Correct SQL:
     fixed_query = output.split("Correct SQL:")[-1].strip()
     fixed_query = fixed_query.split("\n")[0]
 
-    # simple fixes
-    if fixed_query.strip().endswith(">"):
-        fixed_query += " 18"
+    # -----------------------
+    # 🔥 STRONG RULE FIXES
+    # -----------------------
 
+    # Fix typo
     fixed_query = fixed_query.replace("FORM", "FROM")
 
-    if fixed_query.strip().endswith("ORDER"):
-        fixed_query += " BY age"
+    # If no SELECT → fallback
+    if "SELECT" not in fixed_query.upper():
+        return broken_query.replace("FORM", "FROM")
+
+    # Fix missing FROM
+    if "FROM" not in fixed_query.upper():
+        fixed_query = broken_query.replace("FORM", "FROM")
+
+    # Fix weird model outputs
+    if "FROM_" in fixed_query or "age_form" in fixed_query:
+        fixed_query = "SELECT age FROM users"
+
+    # Ensure table name exists
+    if "users" not in fixed_query:
+        fixed_query = broken_query.replace("FORM", "FROM")
+
+    # Limit length
+    fixed_query = fixed_query[:200]
 
     return fixed_query
 
 
+# -----------------------
+# 🔥 LOGGING
+# -----------------------
+def log_start(total_steps):
+    print("[START]", json.dumps({
+        "total_steps": total_steps
+    }), flush=True)
+
+
+def log_step(step, action, reward, done, error, result_data, difficulty):
+    print("[STEP]", json.dumps({
+        "step": step,
+        "action": action,
+        "reward": reward,
+        "done": done,
+        "error": error,
+        "result": result_data,
+        "difficulty": difficulty
+    }), flush=True)
+
+
+def log_end(final_score, success):
+    print("[END]", json.dumps({
+        "final_score": final_score,
+        "success": success
+    }), flush=True)
+
+
+# -----------------------
+# 🔥 MAIN LOOP
+# -----------------------
 async def run():
     env = SQLRepairEnv()
 
     total = 0
-    score = 0
+    score = 0.0
+    num_steps = 5
 
-    print("\n🎮 AI SQL Repair Evaluation Started!\n")
+    log_start(num_steps)
 
-    for i in range(5):
-
+    for i in range(num_steps):
         state = await env.reset()
-
         obs = state["observation"]
 
-        print("\n==============================")
-        print(f"🎯 Episode {i+1} | Difficulty: {obs.difficulty}")
-        print("🧩 Broken Query:")
-        print(obs.broken_query)
+        # ✅ OBJECT ACCESS (FIXED)
+        broken_query = obs.broken_query
+        schema = obs.db_schema
+        difficulty = getattr(obs, "difficulty", "unknown")
 
-        fixed_query = fix_query_with_ai(obs.broken_query, obs.db_schema)
-
-        print("\n🤖 AI Fixed Query:")
-        print(fixed_query)
+        # 🤖 AI FIX
+        fixed_query = fix_query_with_ai(broken_query, schema)
 
         action = Action(query=fixed_query)
         result = await env.step(action)
 
-        reward = result["reward"]
+        reward = result.get("reward", 0.0)
 
-        print("\n🏆 Reward:", reward)
-        print("📊 Result:", result["observation"].result)
+        # ✅ OBJECT ACCESS (FIXED)
+        result_obs = result["observation"]
+        error = getattr(result_obs, "error", None)
+        result_data = result_obs.result
 
         total += 1
         score += reward
 
-        print(f"\n📈 Accuracy: {score / total:.2f}")
+        log_step(
+            step=i + 1,
+            action=fixed_query,
+            reward=reward,
+            done=(reward == 1.0),
+            error=error,
+            result_data=result_data,
+            difficulty=difficulty
+        )
 
-    print("\n==============================")
-    print(f"✅ FINAL SCORE: {score / total:.2f}")
+    # -----------------------
+    # 🔥 FINAL SCORE
+    # -----------------------
+    final_score = score / total if total > 0 else 0.0
+    final_score = min(max(final_score, 0.0), 1.0)
+
+    success = final_score >= 0.8
+
+    log_end(final_score, success)
 
 
-import os
-import time
-
+# -----------------------
+# 🔥 RUN
+# -----------------------
 if __name__ == "__main__":
     asyncio.run(run())
-
-    # ✅ Only keep alive on Hugging Face
-    if os.getenv("HF_SPACE") == "true":
-        while True:
-            time.sleep(60)

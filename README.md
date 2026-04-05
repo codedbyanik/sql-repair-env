@@ -9,25 +9,40 @@ pinned: false
 
 # 🎮 AI SQL Repair Environment
 
-An AI training environment where an agent repairs incorrect SQL queries and is scored based on correctness.
+An AI-powered training environment where an agent repairs incorrect SQL queries and gets scored based on correctness.
 
-## 🚀 Features
-- OpenEnv compliant (step/reset/state)
-- Easy → Medium → Hard tasks
-- Reward-based scoring
-- SQLite execution
-- Hugging Face deployment
+---
 
-## ▶️ Example Output
+# 🚀 Overview
 
-🎯 Episode 1 | Difficulty: easy  
-🧩 Broken Query:  
-SELECT name age FROM users  
+This project simulates a **real-world SQL debugging task**:
 
-🤖 AI Fixed Query:  
-SELECT name, age FROM users  
+- Given a **broken SQL query**
+- AI fixes the query using a language model
+- Query is executed on a database
+- A **reward score (0.0 → 1.0)** is assigned
 
-🏆 Reward: 1.0  
+---
 
-## 🧠 Model Used
-google/flan-t5-base
+# 🧠 Features
+
+- ✅ OpenEnv compliant (`step()`, `reset()`, `state()`)
+- ✅ Multiple difficulty levels (Easy → Medium → Hard)
+- ✅ Reward-based evaluation system
+- ✅ SQLite execution environment
+- ✅ AI-powered query correction (FLAN-T5)
+- ✅ Deployable on Hugging Face Spaces
+- ✅ Interactive UI using Gradio
+
+---
+
+# 🏗️ Environment Design
+
+## 📥 Observation Space
+
+```python
+broken_query: str
+db_schema: str
+difficulty: str
+result: Optional[Any]
+error: Optional[str]

@@ -4,50 +4,37 @@ description: |
   An AI environment where an agent repairs broken SQL queries.
   The agent receives an incorrect SQL query and must generate a correct version.
   The query is executed in a SQLite environment and scored based on correctness.
-
 version: "1.0"
 
-# ✅ Observation Space
 observation_space:
   type: object
   properties:
     broken_query:
       type: string
-      description: The incorrect SQL query
     db_schema:
       type: string
-      description: Database schema information
     difficulty:
       type: string
-      description: Task difficulty level (easy, medium, hard)
     result:
       type: array
-      description: Query execution result
     error:
       type: string
-      description: Error message if execution fails
 
-# ✅ Action Space
 action_space:
   type: object
   properties:
     query:
       type: string
-      description: Corrected SQL query
 
-# ✅ Reward
 reward_range: [0.0, 1.0]
 
-# ✅ Tasks
 tasks:
   - easy
   - medium
   - hard
 
-# ✅ Environment Type
 environment_type: single-agent
 
-# ✅ Evaluation
 evaluation:
   episodes: 10
   metric: average_reward
