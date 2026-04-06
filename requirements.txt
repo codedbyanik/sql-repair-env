@@ -3,3 +3,5 @@ torch
 pydantic
 gradio
 sentencepiece
+google-generativeai
+google-genai
