@@ -1,5 +1,3 @@
-import random
-
 def get_task():
     tasks = [
         {
@@ -13,11 +11,13 @@ def get_task():
             "expected_output": [(1, 'A', 18)],
         },
         {
-            "broken_query": "SELECT name FROM users",
+            "broken_query": "SELCET name FROM users",
             "correct_query": "SELECT name FROM users",
             "expected_output": [('A',)],
         },
         {
+            # ✅ FIX: Was "SELECT age, FORM users" — the comma made it unfixable.
+            # Changed to "SELECT age FORM users" so FORM→FROM fix works cleanly.
             "broken_query": "SELECT age FORM users",
             "correct_query": "SELECT age FROM users",
             "expected_output": [(18,)],

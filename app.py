@@ -3,68 +3,85 @@ import asyncio
 
 from env.environment import SQLRepairEnv
 from env.models import Action
-from inference import fix_query   # ✅ FIXED
+from inference import fix_query
 
 # -----------------------
-# 🔥 MAIN DEMO FUNCTION
+# 🔥 PERSISTENT ENV (created once, reused across clicks)
+# -----------------------
+env = SQLRepairEnv()
+
+# -----------------------
+# 🔥 MAIN FUNCTION
 # -----------------------
 def run_demo():
+
     async def inner():
         try:
-            env = SQLRepairEnv()
-
-            # Reset environment
+            # Reset environment (task_index persists now!)
             state = await env.reset()
             obs = state["observation"]
 
-            # ✅ Correct object access
             broken = obs.broken_query
             schema = obs.db_schema
+            difficulty = getattr(obs, "difficulty", "unknown")
 
-            # 🤖 FIXED FUNCTION CALL
-            fixed = fix_query(broken, schema)   # ✅ FIXED
+            # Fix query
+            fixed = fix_query(broken, schema)
 
-            # Run environment step
+            # Run step
             result = await env.step(Action(query=fixed))
 
-            # ✅ Safe extraction
             reward = result.get("reward", 0.0)
-
             result_obs = result["observation"]
 
             output = result_obs.result
             error = getattr(result_obs, "error", None)
 
-            return broken, fixed, str(output), reward
+            if error:
+                output_text = f"ERROR: {error}"
+            else:
+                output_text = str(output)
+
+            return broken, fixed, output_text, reward, difficulty, "Done ✅"
 
         except Exception as e:
             print("ERROR:", str(e))
-            return "ERROR", "ERROR", str(e), 0.0
+            return "ERROR", "ERROR", str(e), 0.0, "unknown", "Failed ❌"
 
     return asyncio.run(inner())
 
+
 # -----------------------
-# 🔥 UI LAYOUT
+# 🔥 UI
 # -----------------------
 with gr.Blocks() as demo:
+
     gr.Markdown("""
     # 🧠 AI SQL Repair Environment
-    This system takes a broken SQL query, fixes it using AI,
-    executes it, and assigns a reward based on correctness.
+
+    Fix broken SQL queries using:
+    - LLM (OpenAI-compatible client)
+    - Rule-based corrections
+    - OpenEnv evaluation
+
+    👉 Click the button to run a full cycle.
     """)
 
     btn = gr.Button("🚀 Run AI Fix")
 
+    status = gr.Textbox(label="⚡ Status", value="Idle")
     broken = gr.Textbox(label="❌ Broken SQL")
     fixed = gr.Textbox(label="🤖 Fixed SQL")
     result = gr.Textbox(label="📊 Execution Result")
     reward = gr.Number(label="🏆 Reward (0–1)")
+    difficulty = gr.Textbox(label="⚙️ Difficulty")
 
     btn.click(
         fn=run_demo,
         inputs=[],
-        outputs=[broken, fixed, result, reward]
+        outputs=[broken, fixed, result, reward, difficulty, status]
     )
+
 
 # -----------------------
 # 🔥 LAUNCH

@@ -4,6 +4,7 @@ description: |
   An AI environment where an agent repairs broken SQL queries.
   The agent receives an incorrect SQL query and must generate a correct version.
   The query is executed in a SQLite environment and scored based on correctness.
+
 version: "1.0"
 
 observation_space:
