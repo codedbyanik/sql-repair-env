@@ -5,3 +5,5 @@ gradio
 sentencepiece
 accelerate
 openai
+fastapi
+uvicorn

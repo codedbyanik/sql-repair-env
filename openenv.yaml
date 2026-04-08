@@ -1,33 +1,55 @@
 name: sql-repair-env
 
 description: |
-  An AI environment where an agent repairs broken SQL queries.
-  The agent receives an incorrect SQL query and must generate a correct version.
-  The query is executed in a SQLite environment and scored based on correctness.
+  An OpenEnv-compliant single-agent RL environment where an AI agent repairs
+  broken SQL queries. The agent receives an incorrect SQL query and a schema,
+  generates a corrected version, which is then executed in a SQLite sandbox
+  and scored based on query correctness and output matching.
 
 version: "1.0"
+
+author: anik2411
+tags:
+  - sql
+  - nlp
+  - code-repair
+  - reinforcement-learning
+  - sqlite
+  - text2sql
 
 observation_space:
   type: object
   properties:
     broken_query:
       type: string
+      description: The malformed SQL query the agent must repair
     db_schema:
       type: string
+      description: Schema of the SQLite database
     difficulty:
       type: string
+      enum: [easy, medium, hard]
     result:
       type: array
+      description: Query execution result after agent's action
     error:
       type: string
+      description: SQLite error message if execution failed
 
 action_space:
   type: object
   properties:
     query:
       type: string
+      description: The agent's corrected SQL query
 
 reward_range: [0.0, 1.0]
+
+reward_description: |
+  1.0 — Exact normalized query match
+  0.8 — Output rows match expected result (semantically correct)
+  0.3 — Valid SELECT structure but wrong output
+  0.0 — Syntax error or no SELECT present
 
 tasks:
   - easy
@@ -39,3 +61,4 @@ environment_type: single-agent
 evaluation:
   episodes: 10
   metric: average_reward
+  success_threshold: 0.8

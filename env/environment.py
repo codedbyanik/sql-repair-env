@@ -1,16 +1,10 @@
 import sqlite3
-import random
 from env.tasks.easy import get_task as easy_task
 from env.tasks.medium import get_task as medium_task
 from env.tasks.hard import get_task as hard_task
 from env.grader import grade
 from env.models import Observation, Action
 
-# -----------------------
-# 🔥 NOTE: No global random.seed() here — it caused step() to always
-# insert age=18, which randomly broke output matching.
-# Each task's expected_output is now matched to a fixed age (see step()).
-# -----------------------
 
 class SQLRepairEnv:
     def __init__(self):
@@ -21,10 +15,16 @@ class SQLRepairEnv:
 
     # -----------------------
     # 🔥 STATE
+    # ✅ Returns a valid Observation even before reset() is called
+    #    (validator calls state() independently — must never return None)
     # -----------------------
     def state(self):
         if not self.task:
-            return None
+            return Observation(
+                broken_query="",
+                db_schema="users(id INT, name TEXT, age INT)",
+                difficulty="easy"
+            )
         return Observation(
             broken_query=self.task["broken_query"],
             db_schema=self.task["schema"],
@@ -69,15 +69,10 @@ class SQLRepairEnv:
         cursor = conn.cursor()
 
         try:
-            # Create table
+            # Fixed age=18 always so expected_output in task files matches
             cursor.execute("CREATE TABLE users(id INT, name TEXT, age INT)")
-
-            # ✅ FIX: Use fixed age=18 always so expected_output in task files matches.
-            # Previously random.choice([18,20,25]) meant age could be 20 or 25,
-            # causing correct queries to get 0.8 (output mismatch) instead of 1.0.
             cursor.execute("INSERT INTO users VALUES (1, 'A', 18)")
 
-            # Execute the fixed query
             cursor.execute(query)
             result = cursor.fetchall()
             error = None
@@ -91,6 +86,7 @@ class SQLRepairEnv:
 
         # -----------------------
         # 🔥 REWARD
+        # grader.py returns 0.0 on error — we respect that, no override
         # -----------------------
         reward = grade(
             predicted=query,
@@ -100,11 +96,6 @@ class SQLRepairEnv:
             error=error
         )
 
-        # ✅ FIX: Removed the wrong partial reward for syntax errors.
-        # Previously: if syntax error → reward = max(reward, 0.3)
-        # This gave 0.3 reward for BROKEN SQL, which is completely wrong.
-        # grader.py already returns 0.0 for errors — we respect that.
-
         done = reward == 1.0
 
         print(
@@ -112,12 +103,9 @@ class SQLRepairEnv:
             flush=True
         )
 
-        # -----------------------
-        # 🔥 OBSERVATION
-        # -----------------------
         return {
             "observation": Observation(
-                broken_query=self.task["broken_query"],  # keep original broken query
+                broken_query=self.task["broken_query"],
                 db_schema=self.task["schema"],
                 difficulty=self.task["difficulty"],
                 result=result,
@@ -127,3 +115,11 @@ class SQLRepairEnv:
             "done": done,
             "info": {}
         }
+
+    # -----------------------
+    # 🔥 CLOSE
+    # ✅ Required by OpenEnv spec
+    # -----------------------
+    async def close(self):
+        self.task = None
+        print("[CLOSE] Environment closed.", flush=True)
