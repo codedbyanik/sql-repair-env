@@ -3,7 +3,18 @@ name = "sql-repair-env"
 version = "0.1.0"
 description = "SQL Repair OpenEnv Hackathon Environment"
 authors = [{ name = "Anik" }]
-dependencies = []
+dependencies = [
+    "openenv-core>=0.2.0",
+    "transformers==4.41.2",
+    "pydantic",
+    "gradio",
+    "sentencepiece",
+    "accelerate",
+    "openai",
+]
+
+[project.scripts]
+server = "server.app:app"
 
 [build-system]
 requires = ["setuptools", "wheel"]
