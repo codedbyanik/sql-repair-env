@@ -1,0 +1,10 @@
+[project]
+name = "sql-repair-env"
+version = "0.1.0"
+description = "SQL Repair OpenEnv Hackathon Environment"
+authors = [{ name = "Anik" }]
+dependencies = []
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
