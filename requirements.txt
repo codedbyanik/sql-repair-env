@@ -7,3 +7,4 @@ accelerate
 openai
 fastapi
 uvicorn
+httpx

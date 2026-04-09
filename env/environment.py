@@ -8,16 +8,10 @@ from env.models import Observation, Action
 
 class SQLRepairEnv:
     def __init__(self):
-        self.task = None
-        # Cycle through difficulties: easy → medium → hard → easy ...
+        self.task       = None
         self.task_index = 0
         self.task_types = ["easy", "medium", "hard"]
 
-    # -----------------------
-    # 🔥 STATE
-    # ✅ Returns a valid Observation even before reset() is called
-    #    (validator calls state() independently — must never return None)
-    # -----------------------
     def state(self):
         if not self.task:
             return Observation(
@@ -31,9 +25,6 @@ class SQLRepairEnv:
             difficulty=self.task["difficulty"]
         )
 
-    # -----------------------
-    # 🔥 RESET
-    # -----------------------
     async def reset(self):
         task_type = self.task_types[self.task_index % len(self.task_types)]
         self.task_index += 1
@@ -46,8 +37,7 @@ class SQLRepairEnv:
             self.task = hard_task()
 
         self.task["difficulty"] = task_type
-
-        print(f"[RESET] difficulty={task_type} broken_query={self.task['broken_query']}", flush=True)
+        print(f"[RESET] difficulty={task_type} query={self.task['broken_query']}", flush=True)
 
         return {
             "observation": Observation(
@@ -60,34 +50,23 @@ class SQLRepairEnv:
             "info": {}
         }
 
-    # -----------------------
-    # 🔥 STEP
-    # -----------------------
     async def step(self, action: Action):
         query = action.query
-        conn = sqlite3.connect(":memory:")
+        conn  = sqlite3.connect(":memory:")
         cursor = conn.cursor()
 
         try:
-            # Fixed age=18 always so expected_output in task files matches
             cursor.execute("CREATE TABLE users(id INT, name TEXT, age INT)")
             cursor.execute("INSERT INTO users VALUES (1, 'A', 18)")
-
             cursor.execute(query)
             result = cursor.fetchall()
-            error = None
-
+            error  = None
         except Exception as e:
             result = None
-            error = str(e)
-
+            error  = str(e)
         finally:
             conn.close()
 
-        # -----------------------
-        # 🔥 REWARD
-        # grader.py returns 0.0 on error — we respect that, no override
-        # -----------------------
         reward = grade(
             predicted=query,
             expected_query=self.task["correct_query"],
@@ -95,13 +74,8 @@ class SQLRepairEnv:
             expected=self.task["expected_output"],
             error=error
         )
-
         done = reward == 1.0
-
-        print(
-            f"[STEP] query={query!r} reward={reward:.2f} done={done} error={error}",
-            flush=True
-        )
+        print(f"[STEP] query={query!r} reward={reward:.2f} done={done} error={error}", flush=True)
 
         return {
             "observation": Observation(
@@ -116,10 +90,6 @@ class SQLRepairEnv:
             "info": {}
         }
 
-    # -----------------------
-    # 🔥 CLOSE
-    # ✅ Required by OpenEnv spec
-    # -----------------------
     async def close(self):
         self.task = None
         print("[CLOSE] Environment closed.", flush=True)
