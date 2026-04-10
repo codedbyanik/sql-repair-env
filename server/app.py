@@ -30,7 +30,8 @@ ui_env  = SQLRepairEnv()
 
 episode_history = []
 
-app = FastAPI(title="SQL Repair OpenEnv", version="1.0")
+# ✅ FIX: Use a distinct name so it is NOT overwritten by gr.mount_gradio_app()
+fastapi_app = FastAPI(title="SQL Repair OpenEnv", version="1.0")
 
 
 def obs_to_dict(obs):
@@ -47,12 +48,12 @@ def obs_to_dict(obs):
 # API ENDPOINTS — registered FIRST so they take priority
 # =============================================================
 
-@app.get("/health")
+@fastapi_app.get("/health")
 async def health():
     return JSONResponse(status_code=200, content={"status": "ok"})
 
 
-@app.post("/reset")
+@fastapi_app.post("/reset")
 async def reset():
     result = await api_env.reset()
     obs = result["observation"]
@@ -68,7 +69,7 @@ class StepRequest(BaseModel):
     query: str
 
 
-@app.post("/step")
+@fastapi_app.post("/step")
 async def step(body: StepRequest):
     result = await api_env.step(Action(query=body.query))
     obs = result["observation"]
@@ -80,12 +81,12 @@ async def step(body: StepRequest):
     })
 
 
-@app.get("/state")
+@fastapi_app.get("/state")
 async def state():
     return JSONResponse(status_code=200, content=obs_to_dict(api_env.state()))
 
 
-@app.post("/close")
+@fastapi_app.post("/close")
 async def close():
     await api_env.close()
     return JSONResponse(status_code=200, content={"status": "closed"})
@@ -236,8 +237,25 @@ with gr.Blocks(title="🧠 SQL Repair Environment") as demo:
 
 # =============================================================
 # MOUNT GRADIO AT ROOT "/"
-# API endpoints registered above take priority over Gradio
-# So /reset, /step, /health etc. still work correctly
-# Judges see the UI when they click the HF Space App tab
+# ✅ FIX: Mount onto fastapi_app (not "app") and assign result to "app"
+# "app" is what uvicorn picks up: `uvicorn server.app:app`
+# API endpoints registered above take priority over Gradio routes
 # =============================================================
-app = gr.mount_gradio_app(app, demo, path="/")
+app = gr.mount_gradio_app(fastapi_app, demo, path="/")
+
+
+# =============================================================
+# ✅ FIX: main() function + __main__ guard — REQUIRED by OpenEnv
+# =============================================================
+def main():
+    import uvicorn
+    uvicorn.run(
+        "server.app:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+    )
+
+
+if __name__ == '__main__':
+    main()
