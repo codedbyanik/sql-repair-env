@@ -6,7 +6,6 @@ def normalize(query: str) -> str:
 def grade(predicted: str, expected_query: str, result, expected, error=None) -> float:
     """
     Score a predicted SQL query against the expected query and output.
-
     Reward tiers:
         1.0  — Exact query match (normalized)
         0.8  — Output rows match expected (semantically correct)

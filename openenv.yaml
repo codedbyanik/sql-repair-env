@@ -3,7 +3,6 @@ name: sql-repair-env
 description: |
   An OpenEnv-compliant single-agent RL environment where an AI agent repairs
   broken SQL queries.
-
 version: "1.0"
 
 author: anik2411
@@ -48,7 +47,6 @@ reward_description: |
   0.8 — Output rows match expected result
   0.3 — Valid SELECT structure but wrong output
   0.0 — Syntax error or invalid query
-
 tasks:
   - easy
   - medium

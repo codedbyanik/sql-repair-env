@@ -51,8 +51,8 @@ class SQLRepairEnv:
         }
 
     async def step(self, action: Action):
-        query = action.query
-        conn  = sqlite3.connect(":memory:")
+        query  = action.query
+        conn   = sqlite3.connect(":memory:")
         cursor = conn.cursor()
 
         try:
@@ -86,8 +86,8 @@ class SQLRepairEnv:
                 error=error
             ),
             "reward": reward,
-            "done": done,
-            "info": {}
+            "done":   done,
+            "info":   {}
         }
 
     async def close(self):

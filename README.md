@@ -49,72 +49,18 @@ An **OpenEnv-compliant** reinforcement learning environment where an AI agent re
 
 ---
 
-## 📥 Observation Space
-
-```python
-{
-  "broken_query": str,   # The malformed SQL query
-  "db_schema":    str,   # Schema: users(id INT, name TEXT, age INT)
-  "difficulty":   str,   # "easy" | "medium" | "hard"
-  "result":       list,  # Rows returned after step()
-  "error":        str,   # SQLite error if execution failed
-}
-```
-
-## 📤 Action Space
-
-```python
-{
-  "query": str   # Agent's corrected SQL query
-}
-```
-
----
-
 ## 🔌 REST API
 
-The environment exposes a full REST API on port 7860:
+The environment server runs on **port 8000**:
 
 ```bash
-# Reset environment
-POST /reset
-→ { "observation": {...}, "reward": 0.0, "done": false }
-
-# Submit fixed query
-POST /step
-Body: { "query": "SELECT name, age FROM users" }
-→ { "observation": {...}, "reward": 1.0, "done": true }
-
-# Health check
-GET /health
-→ { "status": "ok" }
-
-# Episode history
-GET /history
-→ { "episodes": 5, "average_reward": 0.76, "history": [...] }
-
-# Interactive API docs
-GET /docs
+POST /reset      → get new broken SQL task
+POST /step       → submit fixed SQL, receive reward
+GET  /state      → current environment state
+POST /close      → close environment
+GET  /health     → {"status": "ok"}
+GET  /docs       → interactive Swagger docs
 ```
-
----
-
-## ⚙️ Difficulty Levels
-
-### Easy — Single-clause keyword/syntax errors
-- Missing comma: `SELECT name age FROM users`
-- Typo: `SELECT * FORM users`
-- Wrong keyword: `SELCET name FROM users`
-
-### Medium — Incomplete clauses
-- Truncated WHERE: `SELECT name FROM users WHERE age >`
-- Missing ORDER column: `SELECT age FROM users ORDER`
-- Incomplete LIMIT: `SELECT * FROM users LIMIT`
-
-### Hard — Multi-clause compound errors
-- Double truncation: `SELECT name FROM users WHERE age > AND name =`
-- BETWEEN without range: `SELECT * FROM users WHERE age BETWEEN`
-- HAVING without condition: `SELECT name FROM users GROUP BY age HAVING`
 
 ---
 
@@ -123,34 +69,33 @@ GET /docs
 ```
 Broken SQL
     ↓
-[1] Groq LLM (llama-3.1-8b-instant)   ← primary
+[1] Groq LLM (llama-3.1-8b-instant)   ← primary (OpenAI-compatible)
     ↓ (on failure)
-[2] FLAN-T5 (google/flan-t5-small)     ← local fallback
+[2] FLAN-T5 (google/flan-t5-small)     ← free local fallback
     ↓
-[3] Rule Engine                         ← post-processing fixes
+[3] Rule Engine                         ← post-processing
     ↓
-Fixed SQL → submitted to environment
+Fixed SQL → submitted to env server via HTTP
 ```
 
 ---
 
-## 🏗️ Project Structure
+## 🏗️ Architecture
 
 ```
-.
-├── app.py                  # FastAPI + Gradio server (port 7860)
-├── inference.py            # LLM + fallback + rule engine
-├── openenv.yaml            # OpenEnv spec
-├── Dockerfile
-├── requirements.txt
-└── env/
-    ├── environment.py      # SQLRepairEnv (reset, step, state)
-    ├── grader.py           # Reward scoring logic
-    ├── models.py           # Observation + Action pydantic models
-    └── tasks/
-        ├── easy.py         # 7 easy tasks
-        ├── medium.py       # 7 medium tasks
-        └── hard.py         # 7 hard tasks
+Docker container (port 8000)
+└── server/app.py       ← Pure FastAPI env server (no Gradio, no inference import)
+    ├── POST /reset
+    ├── POST /step
+    ├── GET  /state
+    ├── POST /close
+    └── GET  /health
+
+Validator (separate container)
+└── inference.py        ← Connects to env server via ENV_URL over HTTP
+
+Local demo
+└── app.py              ← Gradio UI (run locally, not in Docker)
 ```
 
 ---
@@ -162,3 +107,6 @@ Fixed SQL → submitted to environment
 | `HF_TOKEN` | ✅ Yes | Groq API key (set in HF Space secrets) |
 | `API_BASE_URL` | No | Defaults to `https://api.groq.com/openai/v1` |
 | `MODEL_NAME` | No | Defaults to `llama-3.1-8b-instant` |
+| `ENV_URL` | No | Env server URL for inference.py (default: `http://localhost:8000`) |
+
+> **Note on fallback:** The primary inference uses OpenAI-compatible API (Groq). FLAN-T5 is loaded lazily only if the LLM call fails, keeping startup fast on 2 vCPU / 8 GB hardware.
