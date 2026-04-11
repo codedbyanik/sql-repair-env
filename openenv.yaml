@@ -51,16 +51,17 @@ reward_description: |
   0.8  — Output rows match expected result
   0.3  — Valid SELECT structure but wrong output
   0.05 — Syntax error or invalid query
+
 tasks:
   - id: easy
     description: Fix syntax errors in SQL queries
-    grader: env/grader.py
+    grader: env.grader:grade
   - id: medium
     description: Fix logic errors in SQL queries
-    grader: env/grader.py
+    grader: env.grader:grade
   - id: hard
     description: Fix semantic errors in SQL queries
-    grader: env/grader.py
+    grader: env.grader:grade
 
 environment_type: single-agent
 
