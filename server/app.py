@@ -118,9 +118,11 @@ def run_demo():
             out    = getattr(robs, "result", None)
 
             output_text = f"ERROR: {error}" if error else str(out)
-
-            if reward == 1.0:
-                reward_label = "✅ Perfect (1.0)"
+            
+            #We are fixing the bug to limit the score here
+            # yaha pe reward mat dikhana!
+            if reward >= 0.9: 
+                reward_label = "✅ Perfect "
             elif reward >= 0.8:
                 reward_label = f"🟢 Good ({reward:.2f})"
             elif reward >= 0.3:

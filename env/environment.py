@@ -45,7 +45,7 @@ class SQLRepairEnv:
                 db_schema=self.task["schema"],
                 difficulty=self.task["difficulty"]
             ),
-            "reward": 0.0,
+            "reward": 0.1,
             "done": False,
             "info": {}
         }
@@ -74,7 +74,13 @@ class SQLRepairEnv:
             expected=self.task["expected_output"],
             error=error
         )
-        done = reward == 1.0
+        if reward >= 1.0:
+            reward = 0.99
+        elif reward <= 0.0:
+            reward = 0.01
+            
+        done = reward >= 0.99
+
         print(f"[STEP] query={query!r} reward={reward:.2f} done={done} error={error}", flush=True)
 
         return {
