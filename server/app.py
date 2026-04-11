@@ -61,13 +61,14 @@ async def reset():
         "observation": obs_to_dict(obs),
         "reward": result["reward"],
         "done":   result["done"],
-        "info":   result["info"],
+        "info":   {
+            "grader": "env.grader:grade",
+            "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
+        },
     })
-
 
 class StepRequest(BaseModel):
     query: str
-
 
 @fastapi_app.post("/step")
 async def step(body: StepRequest):
@@ -77,8 +78,15 @@ async def step(body: StepRequest):
         "observation": obs_to_dict(obs),
         "reward": result["reward"],
         "done":   result["done"],
-        "info":   result["info"],
+        "info":   {
+            "grader": "env.grader:grade",
+            "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
+        },
     })
+
+
+
+
 
 
 @fastapi_app.get("/state")
