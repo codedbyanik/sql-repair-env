@@ -3,6 +3,7 @@ name: sql-repair-env
 description: |
   An OpenEnv-compliant single-agent RL environment where an AI agent repairs
   broken SQL queries.
+
 version: "1.0"
 
 author: anik2411
@@ -50,13 +51,13 @@ reward_description: |
 tasks:
   - id: easy_task
     description: Fix simple SQL syntax errors (missing commas, typos)
-    grader: env.grader:grade
+   grader: env/grader.py
   - id: medium_task
     description: Fix incomplete SQL queries (missing WHERE values, ORDER BY)
-    grader: env.grader:grade
+    grader: env/grader.py
   - id: hard_task
     description: Fix complex SQL queries (GROUP BY, HAVING, BETWEEN)
-    grader: env.grader:grade
+    grader: env/grader.py
 
 environment_type: single-agent
 
