@@ -2,8 +2,32 @@ import sqlite3
 from env.tasks.easy import get_task as easy_task
 from env.tasks.medium import get_task as medium_task
 from env.tasks.hard import get_task as hard_task
-from env.grader import grade
 from env.models import Observation, Action
+from env.grader import grade
+
+TASKS = [
+    {
+        "id": "easy_1",
+        "broken_query": "SELCET name FROM users",
+        "expected_query": "SELECT name FROM users",
+        "expected_output": [("A",)],
+        "grader": grade,
+    },
+    {
+        "id": "medium_1",
+        "broken_query": "SELECT name FROM users WHERE age >",
+        "expected_query": "SELECT name FROM users WHERE age > 18",
+        "expected_output": [],
+        "grader": grade,
+    },
+    {
+        "id": "hard_1",
+        "broken_query": "SELECT name FROM users GROUP BY age HAVING",
+        "expected_query": "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
+        "expected_output": [("A",)],
+        "grader": grade,
+    },
+]
 
 class SQLRepairEnv:
     def __init__(self):
