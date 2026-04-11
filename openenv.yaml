@@ -49,9 +49,15 @@ reward_description: |
   0.3  — Valid SELECT structure but wrong output
   0.05 — Syntax error or invalid query
 tasks:
-  - easy
-  - medium
-  - hard
+  - id: easy_task
+    description: Fix simple SQL syntax errors (missing commas, typos)
+    grader: env.grader:grade
+  - id: medium_task
+    description: Fix incomplete SQL queries (missing WHERE values, ORDER BY)
+    grader: env.grader:grade
+  - id: hard_task
+    description: Fix complex SQL queries (GROUP BY, HAVING, BETWEEN)
+    grader: env.grader:grade
 
 environment_type: single-agent
 
