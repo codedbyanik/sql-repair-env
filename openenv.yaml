@@ -40,7 +40,6 @@ action_space:
     query:
       type: string
 
-reward_range: [0.0, 1.0]
 
 reward_range: [0.05, 0.95]
 reward_description: |

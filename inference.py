@@ -199,34 +199,28 @@ def log_end(success, steps, score, rewards):
 # =============================================================
 async def run() -> None:
     rewards_list = []
-    num_steps    = 5
+    num_tasks = 5  # covers easy, medium, hard, easy, medium
 
     log_start(task="sql-repair", env="custom", model=MODEL_NAME)
 
-    env   = SQLRepairEnv()
-    state = await env.reset()
+    for i in range(num_tasks):
+        env   = SQLRepairEnv()          # fresh env each iteration
+        state = await env.reset()       # new task (cycles easy→medium→hard)
 
-    try:
-        for i in range(num_steps):
-            obs    = state["observation"]
-            broken = obs.broken_query
-            schema = obs.db_schema
+        obs    = state["observation"]
+        broken = obs.broken_query
+        schema = obs.db_schema
 
-            fixed  = fix_query(broken, schema)  # ← LLM called here ✅
-            result = await env.step(Action(query=fixed))
-            state  = result
+        fixed  = fix_query(broken, schema)
+        result = await env.step(Action(query=fixed))
 
-            reward = result.get("reward", 0.0)
-            done   = result.get("done", False)
-            error  = result["observation"].error
+        reward = result.get("reward", 0.0)
+        done   = result.get("done", False)
+        error  = result["observation"].error
 
-            rewards_list.append(reward)
-            log_step(step=i+1, action=fixed, reward=reward, done=done, error=error)
+        rewards_list.append(reward)
+        log_step(step=i+1, action=fixed, reward=reward, done=done, error=error)
 
-            if i < num_steps - 1:
-                state = await env.reset()
-
-    finally:
         await env.close()
 
     score   = sum(rewards_list) / len(rewards_list) if rewards_list else 0.0
