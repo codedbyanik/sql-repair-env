@@ -1,3 +1,5 @@
+from env.grader import grade
+
 def get_task():
     tasks = [
         {"broken_query": "SELECT name age FROM users",  "correct_query": "SELECT name, age FROM users", "expected_output": [('A', 18)]},
@@ -10,5 +12,10 @@ def get_task():
         get_task.index = 0
     task = tasks[get_task.index % len(tasks)]
     get_task.index += 1
-    return {"broken_query": task["broken_query"], "correct_query": task["correct_query"],
-            "expected_output": task["expected_output"], "schema": "users(id INT, name TEXT, age INT)"}
+    return {
+        "broken_query":    task["broken_query"],
+        "correct_query":   task["correct_query"],
+        "expected_output": task["expected_output"],
+        "schema":          "users(id INT, name TEXT, age INT)",
+        "grader":          grade,
+    }

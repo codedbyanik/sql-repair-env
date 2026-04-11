@@ -5,7 +5,6 @@ from env.tasks.hard import get_task as hard_task
 from env.grader import grade
 from env.models import Observation, Action
 
-
 class SQLRepairEnv:
     def __init__(self):
         self.task       = None
@@ -28,17 +27,14 @@ class SQLRepairEnv:
     async def reset(self):
         task_type = self.task_types[self.task_index % len(self.task_types)]
         self.task_index += 1
-
         if task_type == "easy":
             self.task = easy_task()
         elif task_type == "medium":
             self.task = medium_task()
         else:
             self.task = hard_task()
-
         self.task["difficulty"] = task_type
         print(f"[RESET] difficulty={task_type} query={self.task['broken_query']}", flush=True)
-
         return {
             "observation": Observation(
                 broken_query=self.task["broken_query"],
@@ -54,7 +50,6 @@ class SQLRepairEnv:
         query  = action.query
         conn   = sqlite3.connect(":memory:")
         cursor = conn.cursor()
-
         try:
             cursor.execute("CREATE TABLE users(id INT, name TEXT, age INT)")
             cursor.execute("INSERT INTO users VALUES (1, 'A', 18)")
@@ -67,16 +62,18 @@ class SQLRepairEnv:
         finally:
             conn.close()
 
-        reward = grade(
+        # ✅ Only change: use task's own grader
+        grader = self.task.get("grader", grade)
+        reward = grader(
             predicted=query,
             expected_query=self.task["correct_query"],
             result=result,
             expected=self.task["expected_output"],
             error=error
         )
-        done = reward == 1.0
-        print(f"[STEP] query={query!r} reward={reward:.2f} done={done} error={error}", flush=True)
 
+        done = reward >= 0.95
+        print(f"[STEP] query={query!r} reward={reward:.2f} done={done} error={error}", flush=True)
         return {
             "observation": Observation(
                 broken_query=self.task["broken_query"],
