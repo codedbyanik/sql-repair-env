@@ -42,11 +42,12 @@ action_space:
 
 reward_range: [0.0, 1.0]
 
+reward_range: [0.05, 0.95]
 reward_description: |
-  1.0 — Exact normalized query match
-  0.8 — Output rows match expected result
-  0.3 — Valid SELECT structure but wrong output
-  0.0 — Syntax error or invalid query
+  0.95 — Exact normalized query match
+  0.8  — Output rows match expected result
+  0.3  — Valid SELECT structure but wrong output
+  0.05 — Syntax error or invalid query
 tasks:
   - easy
   - medium
