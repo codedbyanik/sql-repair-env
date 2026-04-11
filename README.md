@@ -39,13 +39,12 @@ An **OpenEnv-compliant** reinforcement learning environment where an AI agent re
 ---
 
 ## 🏆 Reward Scale
-
 | Score | Condition |
 |---|---|
-| **1.0** | Exact normalized query match |
+| **0.95** | Exact normalized query match |
 | **0.8** | Output rows match expected result |
 | **0.3** | Valid SELECT structure, wrong output |
-| **0.0** | Syntax error or no SELECT |
+| **0.05** | Syntax error or no SELECT |
 
 ---
 
@@ -62,23 +61,18 @@ GET  /health     → {"status": "ok"}
 GET  /docs       → interactive Swagger docs
 ```
 
----
-
 ## 🧠 Inference Pipeline
-
 ```
 Broken SQL
     ↓
-[1] Groq LLM (llama-3.1-8b-instant)   ← primary (OpenAI-compatible)
-    ↓ (on failure)
-[2] FLAN-T5 (google/flan-t5-small)     ← free local fallback
+[1] Groq LLM via LiteLLM proxy (llama-3.1-8b-instant)  ← primary (API_KEY injected by validator)
     ↓
-[3] Rule Engine                         ← post-processing
+[2] Lookup Table                                          ← snaps to exact correct answer
     ↓
-Fixed SQL → submitted to env server via HTTP
+[3] Rule Engine                                           ← last resort fallback
+    ↓
+Fixed SQL → submitted directly via SQLRepairEnv
 ```
-
----
 
 ## 🏗️ Architecture
 
