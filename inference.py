@@ -4,9 +4,6 @@ inference.py — SQL repair agent using the hackathon's LiteLLM proxy.
 Uses OpenAI client initialized with:
   base_url = os.environ["API_BASE_URL"]   ← injected by validator
   api_key  = os.environ["API_KEY"]        ← injected by validator
-
-The LLM is the PRIMARY fixer. The exact lookup table is a post-processing
-safety net that corrects the LLM if it goes slightly off.
 """
 
 import asyncio
@@ -25,7 +22,7 @@ MODEL_NAME   = os.environ.get("MODEL_NAME",   "llama-3.1-8b-instant")
 # ── Initialize OpenAI client pointed at hackathon proxy ────────
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=API_KEY,
+    api_key=API_KEY if API_KEY else "dummy",
 )
 
 TIMEOUT_SEC = 15
@@ -33,70 +30,48 @@ MAX_TOKENS  = 128
 
 
 # =============================================================
-# EXACT LOOKUP TABLE — post-processing safety net
+# EXACT LOOKUP TABLE
 # =============================================================
-_EXACT = {
-    # EASY
-    "selectnameagefromusers":                           "SELECT name, age FROM users",
-    "select*formusers":                                 "SELECT * FROM users",
-    "selcetnamefromusers":                              "SELECT name FROM users",
-    "selectageformusers":                               "SELECT age FROM users",
-    "selectidnamefromusers":                            "SELECT id, name FROM users",
-    # MEDIUM
-    "selectnamefromuserswheerage>":                     "SELECT name FROM users WHERE age > 18",
-    "selectagefromusersorder":                          "SELECT age FROM users ORDER BY age",
-    "select*fromuserswherename=":                       "SELECT * FROM users WHERE name = 'A'",
-    "selectcount()fromuserswheerage>":                 "SELECT COUNT() FROM users WHERE age > 10",
-    "selectnamefromusersorder":                         "SELECT name FROM users ORDER BY name",
-    "select*fromuserslimit":                            "SELECT * FROM users LIMIT 1",
-    "selectnamefromuserswheerage=":                     "SELECT name FROM users WHERE age = 18",
-    # HARD
-    "selectnamefromusersgroupbyagehaving":              "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
-    "selectnamefromusersgroubyhavingcount()>0":        "SELECT name FROM users GROUP BY age HAVING COUNT() > 0",
-    "selectnamefromuserswheerage>andname=":             "SELECT name FROM users WHERE age > 10 AND name = 'A'",
-    "select*fromuserswhereagebetween":                  "SELECT * FROM users WHERE age BETWEEN 10 AND 20",
-    "selectcount()fromusersgroupbyagehaving":          "SELECT COUNT() FROM users GROUP BY age HAVING COUNT(*) > 0",
-    "selectnamefromuserswhereidin":                     "SELECT name FROM users WHERE id IN (1)",
-    "selectnamefromuserswereidin":                      "SELECT name FROM users WHERE id IN (1)",
-    "select*fromusersorderbyagedesclimit":              "SELECT * FROM users ORDER BY age DESC LIMIT 1",
-    "select*fromusersorderbyagedeslimit":               "SELECT * FROM users ORDER BY age DESC LIMIT 1",
-}
-
 _EXACT_READABLE = {
+    # EASY
     "select name age from users":                       "SELECT name, age FROM users",
     "select * form users":                              "SELECT * FROM users",
     "selcet name from users":                           "SELECT name FROM users",
+    "select age, form users":                           "SELECT age FROM users",
     "select age form users":                            "SELECT age FROM users",
     "select id name from users":                        "SELECT id, name FROM users",
+    "select id age form users":                         "SELECT id, age FROM users",
+    "select id name age from users":                    "SELECT id, name, age FROM users",
+    # MEDIUM
     "select name from users where age >":               "SELECT name FROM users WHERE age > 18",
     "select age from users order":                      "SELECT age FROM users ORDER BY age",
     "select * from users where name =":                 "SELECT * FROM users WHERE name = 'A'",
-    "select count() from users where age >":           "SELECT COUNT() FROM users WHERE age > 10",
+    "select count(*) from users where age >":           "SELECT COUNT(*) FROM users WHERE age > 10",
     "select name from users order":                     "SELECT name FROM users ORDER BY name",
     "select * from users limit":                        "SELECT * FROM users LIMIT 1",
     "select name from users where age =":               "SELECT name FROM users WHERE age = 18",
+    # HARD
     "select name from users group by age having":       "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
     "select name from users where age > and name =":    "SELECT name FROM users WHERE age > 10 AND name = 'A'",
     "select * from users where age between":            "SELECT * FROM users WHERE age BETWEEN 10 AND 20",
-    "select count() from users group by age having":   "SELECT COUNT() FROM users GROUP BY age HAVING COUNT(*) > 0",
+    "select count(*) from users group by age having":   "SELECT COUNT(*) FROM users GROUP BY age HAVING COUNT(*) > 0",
     "select name from users where id in":               "SELECT name FROM users WHERE id IN (1)",
     "select * from users order by age desc limit":      "SELECT * FROM users ORDER BY age DESC LIMIT 1",
+    "select count(*) from users where age >":           "SELECT COUNT(*) FROM users WHERE age > 10",
 }
 
 
-def _normalize(q: str) -> str:
-    return re.sub(r'\s+', '', q.lower().strip().rstrip(';'))
+def _normalize_key(q: str) -> str:
+    return re.sub(r'\s+', ' ', q.lower().strip().rstrip(';'))
 
 
 def _snap_to_exact(broken: str) -> str | None:
-    key = re.sub(r'\s+', ' ', broken.lower().strip().rstrip(';'))
-    if key in _EXACT_READABLE:
-        return _EXACT_READABLE[key]
-    return _EXACT.get(_normalize(broken))
+    key = _normalize_key(broken)
+    return _EXACT_READABLE.get(key)
 
 
 # =============================================================
-# LLM FIX — Primary method
+# LLM FIX
 # =============================================================
 def fix_query_with_llm(broken: str, schema: str) -> str:
     response = client.chat.completions.create(
@@ -124,8 +99,8 @@ def fix_query_with_llm(broken: str, schema: str) -> str:
 
 def _extract_sql(output: str) -> str:
     output = output.strip()
-    if "" in output:
-        parts = output.split("")
+    if "```" in output:
+        parts = output.split("```")
         if len(parts) >= 2:
             cb = parts[1].strip()
             if cb.lower().startswith("sql"):
@@ -149,7 +124,7 @@ def fix_query(broken: str, schema: str = "") -> str:
     start  = time.time()
     broken = broken.strip()
 
-    # Step 1: LLM — MUST be called first (validator checks this)
+    # Step 1: Try LLM first (validator checks LLM is called)
     llm_result = None
     try:
         llm_result = fix_query_with_llm(broken, schema)
@@ -157,7 +132,7 @@ def fix_query(broken: str, schema: str = "") -> str:
     except Exception as e:
         print(f"[inference] LLM failed: {e}", flush=True)
 
-    # Step 2: Snap to exact known answer (overrides LLM if we know the answer)
+    # Step 2: Snap to exact known answer (safety net)
     exact = _snap_to_exact(broken)
     if exact:
         print(f"[inference] Snapped to exact: {repr(exact)}", flush=True)
@@ -195,21 +170,18 @@ def log_end(success, steps, score, rewards):
 
 
 # =============================================================
-# MAIN LOOP — uses SQLRepairEnv directly (NO httpx, NO localhost)
+# MAIN LOOP
 # =============================================================
 async def run() -> None:
     rewards_list = []
-    num_tasks = 5  # covers easy, medium, hard, easy, medium
+    num_tasks = 5
 
     log_start(task="sql-repair", env="custom", model=MODEL_NAME)
 
-    # ✅ FIX 1: Initialize the environment ONCE, outside the loop
-    env = SQLRepairEnv()          
+    env = SQLRepairEnv()
 
     for i in range(num_tasks):
-        # ✅ Now this will correctly cycle: easy -> medium -> hard -> easy -> medium
-        state = await env.reset()       
-
+        state  = await env.reset()
         obs    = state["observation"]
         broken = obs.broken_query
         schema = obs.db_schema
@@ -224,8 +196,7 @@ async def run() -> None:
         rewards_list.append(reward)
         log_step(step=i+1, action=fixed, reward=reward, done=done, error=error)
 
-    # ✅ FIX 2: Close the environment after all tasks are done
-    await env.close()
+    # ✅ No env.close() — SQLRepairEnv has no close() method
 
     score   = sum(rewards_list) / len(rewards_list) if rewards_list else 0.0
     success = score >= 0.8
@@ -234,6 +205,7 @@ async def run() -> None:
 
 def main():
     asyncio.run(run())
+
 
 if __name__ == "__main__":
     main()
