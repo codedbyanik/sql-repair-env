@@ -7,21 +7,21 @@ from env.grader import grade
 
 TASKS = [
     {
-        "id": "easy_1",
+        "id": "easy",
         "broken_query": "SELCET name FROM users",
         "expected_query": "SELECT name FROM users",
         "expected_output": [("A",)],
         "grader": grade,
     },
     {
-        "id": "medium_1",
+        "id": "medium",
         "broken_query": "SELECT name FROM users WHERE age >",
         "expected_query": "SELECT name FROM users WHERE age > 18",
         "expected_output": [],
         "grader": grade,
     },
     {
-        "id": "hard_1",
+        "id": "hard",
         "broken_query": "SELECT name FROM users GROUP BY age HAVING",
         "expected_query": "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
         "expected_output": [("A",)],

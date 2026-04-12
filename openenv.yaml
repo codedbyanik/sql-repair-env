@@ -52,19 +52,17 @@ reward_description: |
   0.3  — Valid SELECT structure but wrong output
   0.05 — Syntax error or invalid query
 
+
 tasks:
   - id: easy
     name: "Easy SQL Repair"
     description: Fix syntax errors in SQL queries
-    grader: env.grader:grade
   - id: medium
     name: "Medium SQL Repair"
     description: Fix logic errors in SQL queries
-    grader: env.grader:grade
   - id: hard
     name: "Hard SQL Repair"
     description: Fix semantic errors in SQL queries
-    grader: env.grader:grade
 
 environment_type: single-agent
 
