@@ -5,12 +5,13 @@ type: docker
 description: |
   An OpenEnv-compliant single-agent RL environment where an AI agent repairs
   broken SQL queries.
+
 version: "1.0"
 author: anik2411
 
 runtime:
   app: server/app.py
-  port: 8000
+  port: 7860
 
 entry_point: env.environment:SQLRepairEnv
 
@@ -46,6 +47,7 @@ action_space:
       type: string
 
 reward_range: [0.05, 0.95]
+
 reward_description: |
   0.95 — Exact normalized query match
   0.8  — Output rows match expected result
@@ -55,13 +57,16 @@ reward_description: |
 tasks:
   - id: easy
     name: "Easy SQL Repair"
-    description: Fix syntax errors in SQL queries
+    description: "Fix simple SQL syntax errors like missing commas and typos."
+    grader: env.grader:grade
   - id: medium
     name: "Medium SQL Repair"
-    description: Fix logic errors in SQL queries
+    description: "Fix incomplete SQL queries with missing WHERE values and ORDER BY."
+    grader: env.grader:grade
   - id: hard
     name: "Hard SQL Repair"
-    description: Fix semantic errors in SQL queries
+    description: "Fix complex SQL queries with GROUP BY, HAVING, and BETWEEN."
+    grader: env.grader:grade
 
 environment_type: single-agent
 
