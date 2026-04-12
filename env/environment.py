@@ -58,6 +58,7 @@ class SQLRepairEnv:
         else:
             self.task = hard_task()
         self.task["difficulty"] = task_type
+        self.task["id"] = task_type
         print(f"[RESET] difficulty={task_type} query={self.task['broken_query']}", flush=True)
         return {
             "observation": Observation(
