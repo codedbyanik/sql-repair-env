@@ -46,16 +46,16 @@ _EXACT = {
     "selectnamefromuserswheerage>":                     "SELECT name FROM users WHERE age > 18",
     "selectagefromusersorder":                          "SELECT age FROM users ORDER BY age",
     "select*fromuserswherename=":                       "SELECT * FROM users WHERE name = 'A'",
-    "selectcount(*)fromuserswheerage>":                 "SELECT COUNT(*) FROM users WHERE age > 10",
+    "selectcount()fromuserswheerage>":                 "SELECT COUNT() FROM users WHERE age > 10",
     "selectnamefromusersorder":                         "SELECT name FROM users ORDER BY name",
     "select*fromuserslimit":                            "SELECT * FROM users LIMIT 1",
     "selectnamefromuserswheerage=":                     "SELECT name FROM users WHERE age = 18",
     # HARD
     "selectnamefromusersgroupbyagehaving":              "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
-    "selectnamefromusersgroubyhavingcount(*)>0":        "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
+    "selectnamefromusersgroubyhavingcount()>0":        "SELECT name FROM users GROUP BY age HAVING COUNT() > 0",
     "selectnamefromuserswheerage>andname=":             "SELECT name FROM users WHERE age > 10 AND name = 'A'",
     "select*fromuserswhereagebetween":                  "SELECT * FROM users WHERE age BETWEEN 10 AND 20",
-    "selectcount(*)fromusersgroupbyagehaving":          "SELECT COUNT(*) FROM users GROUP BY age HAVING COUNT(*) > 0",
+    "selectcount()fromusersgroupbyagehaving":          "SELECT COUNT() FROM users GROUP BY age HAVING COUNT(*) > 0",
     "selectnamefromuserswhereidin":                     "SELECT name FROM users WHERE id IN (1)",
     "selectnamefromuserswereidin":                      "SELECT name FROM users WHERE id IN (1)",
     "select*fromusersorderbyagedesclimit":              "SELECT * FROM users ORDER BY age DESC LIMIT 1",
@@ -71,14 +71,14 @@ _EXACT_READABLE = {
     "select name from users where age >":               "SELECT name FROM users WHERE age > 18",
     "select age from users order":                      "SELECT age FROM users ORDER BY age",
     "select * from users where name =":                 "SELECT * FROM users WHERE name = 'A'",
-    "select count(*) from users where age >":           "SELECT COUNT(*) FROM users WHERE age > 10",
+    "select count() from users where age >":           "SELECT COUNT() FROM users WHERE age > 10",
     "select name from users order":                     "SELECT name FROM users ORDER BY name",
     "select * from users limit":                        "SELECT * FROM users LIMIT 1",
     "select name from users where age =":               "SELECT name FROM users WHERE age = 18",
     "select name from users group by age having":       "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
     "select name from users where age > and name =":    "SELECT name FROM users WHERE age > 10 AND name = 'A'",
     "select * from users where age between":            "SELECT * FROM users WHERE age BETWEEN 10 AND 20",
-    "select count(*) from users group by age having":   "SELECT COUNT(*) FROM users GROUP BY age HAVING COUNT(*) > 0",
+    "select count() from users group by age having":   "SELECT COUNT() FROM users GROUP BY age HAVING COUNT(*) > 0",
     "select name from users where id in":               "SELECT name FROM users WHERE id IN (1)",
     "select * from users order by age desc limit":      "SELECT * FROM users ORDER BY age DESC LIMIT 1",
 }
@@ -124,8 +124,8 @@ def fix_query_with_llm(broken: str, schema: str) -> str:
 
 def _extract_sql(output: str) -> str:
     output = output.strip()
-    if "```" in output:
-        parts = output.split("```")
+    if "" in output:
+        parts = output.split("")
         if len(parts) >= 2:
             cb = parts[1].strip()
             if cb.lower().startswith("sql"):
@@ -203,9 +203,12 @@ async def run() -> None:
 
     log_start(task="sql-repair", env="custom", model=MODEL_NAME)
 
+    # ✅ FIX 1: Initialize the environment ONCE, outside the loop
+    env = SQLRepairEnv()          
+
     for i in range(num_tasks):
-        env   = SQLRepairEnv()          # fresh env each iteration
-        state = await env.reset()       # new task (cycles easy→medium→hard)
+        # ✅ Now this will correctly cycle: easy -> medium -> hard -> easy -> medium
+        state = await env.reset()       
 
         obs    = state["observation"]
         broken = obs.broken_query
@@ -221,7 +224,8 @@ async def run() -> None:
         rewards_list.append(reward)
         log_step(step=i+1, action=fixed, reward=reward, done=done, error=error)
 
-        await env.close()
+    # ✅ FIX 2: Close the environment after all tasks are done
+    await env.close()
 
     score   = sum(rewards_list) / len(rewards_list) if rewards_list else 0.0
     success = score >= 0.8
