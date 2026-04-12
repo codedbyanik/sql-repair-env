@@ -1,9 +1,7 @@
 import sqlite3
-from env.tasks.easy import get_task as easy_task
-from env.tasks.medium import get_task as medium_task
-from env.tasks.hard import get_task as hard_task
 from env.models import Observation, Action
 from env.grader import grade
+
 
 TASKS = [
     {
