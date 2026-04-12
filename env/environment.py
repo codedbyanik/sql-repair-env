@@ -1,44 +1,34 @@
 import sqlite3
+import random
 from env.models import Observation, Action
 from env.grader import grade
 
-
 TASKS = [
-    {
-        "id": "easy",
-        "broken_query": "SELCET name FROM users",
-        "expected_query": "SELECT name FROM users",
-        "expected_output": [("A",)],
-        "grader": grade,
-    },
-    {
-        "id": "medium",
-        "broken_query": "SELECT name FROM users WHERE age >",
-        "expected_query": "SELECT name FROM users WHERE age > 18",
-        "expected_output": [],
-        "grader": grade,
-    },
-    {
-        "id": "hard",
-        "broken_query": "SELECT name FROM users GROUP BY age HAVING",
-        "expected_query": "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0",
-        "expected_output": [("A",)],
-        "grader": grade,
-    },
+    # EASY
+    {"id": "easy", "broken_query": "SELCET name FROM users", "expected_query": "SELECT name FROM users", "expected_output": [("A",)]},
+    {"id": "easy", "broken_query": "SELECT * FORM users", "expected_query": "SELECT * FROM users", "expected_output": [(1, "A", 18)]},
+    {"id": "easy", "broken_query": "SELECT name age FROM users", "expected_query": "SELECT name, age FROM users", "expected_output": [("A", 18)]},
+    # MEDIUM
+    {"id": "medium", "broken_query": "SELECT name FROM users WHERE age >", "expected_query": "SELECT name FROM users WHERE age > 18", "expected_output": []},
+    {"id": "medium", "broken_query": "SELECT age FROM users ORDER", "expected_query": "SELECT age FROM users ORDER BY age", "expected_output": [(18,)]},
+    {"id": "medium", "broken_query": "SELECT * FROM users WHERE name =", "expected_query": "SELECT * FROM users WHERE name = 'A'", "expected_output": [(1, "A", 18)]},
+    # HARD
+    {"id": "hard", "broken_query": "SELECT name FROM users GROUP BY age HAVING", "expected_query": "SELECT name FROM users GROUP BY age HAVING COUNT(*) > 0", "expected_output": [("A",)]},
+    {"id": "hard", "broken_query": "SELECT * FROM users WHERE age BETWEEN", "expected_query": "SELECT * FROM users WHERE age BETWEEN 10 AND 20", "expected_output": [(1, "A", 18)]},
+    {"id": "hard", "broken_query": "SELECT name FROM users WHERE age > AND name =", "expected_query": "SELECT name FROM users WHERE age > 10 AND name = 'A'", "expected_output": [("A",)]},
 ]
 
+
 class SQLRepairEnv:
-    def __init__(self):   # ✅ FIXED
+    def __init__(self):
         self.task       = None
         self.task_index = 0
         self.task_types = ["easy", "medium", "hard"]
 
-    # ✅ REQUIRED for validator
     @property
     def task_ids(self):
         return self.task_types
 
-    # (optional, harmless)
     @property
     def tasks(self):
         return TASKS
@@ -56,7 +46,6 @@ class SQLRepairEnv:
             difficulty=self.task["difficulty"]
         )
 
-    # ✅ FIXED: supports task_id
     async def reset(self, task_id=None):
         if task_id is None:
             task_type = self.task_types[self.task_index % len(self.task_types)]
@@ -64,19 +53,14 @@ class SQLRepairEnv:
         else:
             task_type = task_id
 
-        if task_type == "easy":
-            self.task = easy_task()
-        elif task_type == "medium":
-            self.task = medium_task()
-        elif task_type == "hard":
-            self.task = hard_task()
-        else:
-            raise ValueError(f"Unknown task_id: {task_type}")
+        # ✅ Random choice from matching tasks
+        self.task = random.choice([t for t in TASKS if t["id"] == task_type]).copy()
 
-        self.task["difficulty"] = task_type
-        self.task["id"] = task_type
+        self.task["schema"]     = "users(id INT, name TEXT, age INT)"
+        self.task["difficulty"] = self.task["id"]
+        self.task["grader"]     = grade
 
-        print(f"[RESET] difficulty={task_type} query={self.task['broken_query']}", flush=True)
+        print(f"[RESET] difficulty={self.task['id']} query={self.task['broken_query']}", flush=True)
 
         return {
             "observation": Observation(
@@ -85,10 +69,10 @@ class SQLRepairEnv:
                 difficulty=self.task["difficulty"]
             ),
             "reward": 0.0,
-            "done": False,
+            "done":   False,
             "info": {
                 "task_id": self.task["id"],
-                "grader": "env.grader:grade"
+                "grader":  "env.grader:grade"
             }
         }
 
@@ -109,10 +93,11 @@ class SQLRepairEnv:
         finally:
             conn.close()
 
-        grader = self.task.get("grader", grade)
-        reward = grader(
+        grader_cls = self.task.get("grader", grade)
+        grader     = grader_cls()
+        reward     = grader.grade(
             predicted=query,
-            expected_query=self.task.get("expected_query", self.task.get("correct_query")),
+            expected_query=self.task.get("expected_query"),
             result=result,
             expected=self.task.get("expected_output"),
             error=error
@@ -131,11 +116,11 @@ class SQLRepairEnv:
                 error=error
             ),
             "reward": reward,
-            "done": done,
+            "done":   done,
             "info": {
-                "task_id": self.task.get("id", "unknown") if self.task else "unknown",
-                "grader": "env.grader:grade",
-                "grader_score": float(reward)   # ✅ CRITICAL
+                "task_id":      self.task.get("id", "unknown"),
+                "grader":       "env.grader:grade",
+                "grader_score": float(reward)
             }
         }
 
