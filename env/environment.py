@@ -35,6 +35,11 @@ class SQLRepairEnv:
         self.task_index = 0
         self.task_types = ["easy", "medium", "hard"]
 
+    # 🔥 THE NEW FIX: Expose task_ids to the validator
+    @property
+    def task_ids(self):
+        return self.task_types
+
     def state(self):
         if not self.task:
             return Observation(
@@ -90,6 +95,7 @@ class SQLRepairEnv:
         finally:
             conn.close()
 
+        # ✅ Safely handle expected_query vs correct_query
         grader = self.task.get("grader", grade)
         reward = grader(
             predicted=query,
@@ -114,7 +120,7 @@ class SQLRepairEnv:
             "info": {
                 "task_id": self.task.get("id", "unknown") if self.task else "unknown",
                 "grader": "env.grader:grade",
-                "grader_score": float(reward)  
+                "grader_score": float(reward)  # ✅ Expose the score to the validator
             }
         }
 
