@@ -68,7 +68,10 @@ class SQLRepairEnv:
             ),
             "reward": 0.0,
             "done": False,
-            "info": {}
+            "info": {
+                "task_id": self.task["id"],
+                "grader": "env.grader:grade"
+            }
         }
 
     async def step(self, action: Action):
@@ -109,7 +112,10 @@ class SQLRepairEnv:
             ),
             "reward": reward,
             "done":   done,
-            "info":   {}
+            "info": {
+                "task_id": self.task.get("id", "unknown") if self.task else "unknown",
+                "grader": "env.grader:grade"
+            }
         }
 
     async def close(self):

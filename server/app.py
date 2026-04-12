@@ -61,10 +61,11 @@ async def reset():
         "observation": obs_to_dict(obs),
         "reward": result["reward"],
         "done":   result["done"],
-        "info":   {
-            "grader": "env.grader:grade",
-            "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
-        },
+        # "info":   {
+        #     "grader": "env.grader:grade",
+        #     "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
+        # },
+        "info": result["info"]
     })
 
 class StepRequest(BaseModel):
@@ -78,10 +79,11 @@ async def step(body: StepRequest):
         "observation": obs_to_dict(obs),
         "reward": result["reward"],
         "done":   result["done"],
-        "info":   {
-            "grader": "env.grader:grade",
-            "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
-        },
+        # "info":   {
+        #     "grader": "env.grader:grade",
+        #     "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
+        # },
+        "info": result["info"]
     })
 
 
