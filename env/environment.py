@@ -90,13 +90,12 @@ class SQLRepairEnv:
         finally:
             conn.close()
 
-        # ✅ Only change: use task's own grader
         grader = self.task.get("grader", grade)
         reward = grader(
             predicted=query,
-            expected_query=self.task["correct_query"],
+            expected_query=self.task.get("expected_query", self.task.get("correct_query")),
             result=result,
-            expected=self.task["expected_output"],
+            expected=self.task.get("expected_output"),
             error=error
         )
 
@@ -114,7 +113,8 @@ class SQLRepairEnv:
             "done":   done,
             "info": {
                 "task_id": self.task.get("id", "unknown") if self.task else "unknown",
-                "grader": "env.grader:grade"
+                "grader": "env.grader:grade",
+                "grader_score": float(reward)  
             }
         }
 
