@@ -1,11 +1,5 @@
 """
-server/app.py — Docker entry point (port 8000).
-
-Gradio UI is mounted at "/" — so when judges click the HF Space App tab,
-they see the full UI immediately.
-
-API endpoints (/reset, /step, /health, /state, /close) are registered on
-FastAPI BEFORE Gradio is mounted, so they take priority over Gradio routes.
+server/app.py — Docker entry point (port 7860).
 """
 
 import sys
@@ -21,16 +15,12 @@ from pydantic import BaseModel
 
 from env.environment import SQLRepairEnv
 from env.models import Action
+from env.grader import grade
 
-# Two separate env instances
-# api_env → validator (/reset /step /close)
-# ui_env  → Gradio UI button
 api_env = SQLRepairEnv()
 ui_env  = SQLRepairEnv()
-
 episode_history = []
 
-# ✅ FIX: Use a distinct name so it is NOT overwritten by gr.mount_gradio_app()
 fastapi_app = FastAPI(title="SQL Repair OpenEnv", version="1.0")
 
 
@@ -44,13 +34,14 @@ def obs_to_dict(obs):
     }
 
 
-# =============================================================
-# API ENDPOINTS — registered FIRST so they take priority
-# =============================================================
+@fastapi_app.get("/")
+async def root():
+    return {"status": "ok"}
+
 
 @fastapi_app.get("/health")
 async def health():
-    return JSONResponse(status_code=200, content={"status": "ok"})
+    return {"status": "ok"}
 
 
 @fastapi_app.post("/reset")
@@ -61,15 +52,13 @@ async def reset():
         "observation": obs_to_dict(obs),
         "reward": result["reward"],
         "done":   result["done"],
-        # "info":   {
-        #     "grader": "env.grader:grade",
-        #     "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
-        # },
-        "info": result["info"]
+        "info":   result["info"],
     })
+
 
 class StepRequest(BaseModel):
     query: str
+
 
 @fastapi_app.post("/step")
 async def step(body: StepRequest):
@@ -79,33 +68,46 @@ async def step(body: StepRequest):
         "observation": obs_to_dict(obs),
         "reward": result["reward"],
         "done":   result["done"],
-        # "info":   {
-        #     "grader": "env.grader:grade",
-        #     "task_id": api_env.task.get("id", "unknown") if api_env.task else "unknown",
-        # },
-        "info": result["info"]
+        "info":   result["info"],
     })
-
-
-
-
 
 
 @fastapi_app.get("/state")
 async def state():
-    return JSONResponse(status_code=200, content=obs_to_dict(api_env.state()))
+    obs = api_env.state()
+    if obs is None:
+        return JSONResponse(status_code=200, content={"state": None})
+    return JSONResponse(status_code=200, content=obs_to_dict(obs))
 
 
-@fastapi_app.post("/close")
-async def close():
-    await api_env.close()
-    return JSONResponse(status_code=200, content={"status": "closed"})
+class GraderRequest(BaseModel):
+    task_id: str = "easy"
+    predicted: str = ""
+    expected_query: str = ""
+    result: object = None
+    expected: object = None
+    error: str = None
+
+
+@fastapi_app.post("/grader")
+async def grader_endpoint(body: GraderRequest):
+    g = grade()
+    score = g.grade(
+        predicted=body.predicted,
+        expected_query=body.expected_query,
+        result=body.result,
+        expected=body.expected,
+        error=body.error,
+    )
+    return JSONResponse(status_code=200, content={
+        "task_id": body.task_id,
+        "score":   score,
+        "reward":  score,
+    })
 
 
 # =============================================================
-# GRADIO UI FUNCTION
-# fix_query imported INSIDE the function — NOT at module level
-# This prevents circular import crash on container startup
+# GRADIO UI
 # =============================================================
 
 def run_demo():
@@ -129,8 +131,8 @@ def run_demo():
 
             output_text = f"ERROR: {error}" if error else str(out)
 
-            if reward == 1.0:
-                reward_label = "✅ Perfect (1.0)"
+            if reward >= 0.95:
+                reward_label = f"✅ Perfect ({reward:.2f})"
             elif reward >= 0.8:
                 reward_label = f"🟢 Good ({reward:.2f})"
             elif reward >= 0.3:
@@ -152,7 +154,7 @@ def run_demo():
             table  = "| # | Difficulty | Broken Query | Fixed Query | Reward |\n"
             table += "|---|---|---|---|---|\n"
             for e in reversed(episode_history[-10:]):
-                icon = ("✅" if e["reward"] == 1.0
+                icon = ("✅" if e["reward"] >= 0.95
                         else "🟢" if e["reward"] >= 0.8
                         else "🟡" if e["reward"] >= 0.3
                         else "🔴")
@@ -162,16 +164,11 @@ def run_demo():
                     f"| {icon} {e['reward']:.2f} |\n"
                 )
 
-            status_msg = (
-                f"✅ Episode {len(episode_history)} | "
-                f"Reward: {reward:.2f} | Avg: {avg:.2f}"
-            )
-
             return (
                 broken, schema, fixed, output_text,
                 reward_label, difficulty.upper(),
                 f"{avg:.2f}", str(len(episode_history)),
-                table, status_msg,
+                table, f"✅ Episode {len(episode_history)} | Reward: {reward:.2f} | Avg: {avg:.2f}",
             )
 
         except Exception as e:
@@ -186,14 +183,10 @@ def run_demo():
     return asyncio.run(inner())
 
 
-# =============================================================
-# GRADIO BLOCKS
-# =============================================================
-
 with gr.Blocks(title="🧠 SQL Repair Environment") as demo:
     gr.Markdown("""
     # 🧠 AI SQL Repair Environment
-    > **OpenEnv-compliant** RL environment — AI agent repairs broken SQL and gets scored.
+    > **OpenEnv-compliant** RL environment — AI agent repairs broken SQL and gets scored 0.05→0.95.
     > Difficulty auto-rotates: **Easy → Medium → Hard → Easy...**
     """)
 
@@ -229,10 +222,10 @@ with gr.Blocks(title="🧠 SQL Repair Environment") as demo:
         |---|---|---|
         | `/reset` | POST | Reset env, get new broken query |
         | `/step` | POST `{"query":"..."}` | Submit fixed SQL, get reward |
+        | `/grader` | POST | Score a query directly |
         | `/state` | GET | Current env state |
-        | `/close` | POST | Close environment |
         | `/health` | GET | `{"status": "ok"}` |
-        | `/docs` | GET | Swagger docs |
+        | `/docs` | GET | Swagger API docs |
         """)
 
     btn.click(
@@ -245,27 +238,14 @@ with gr.Blocks(title="🧠 SQL Repair Environment") as demo:
         ],
     )
 
-# =============================================================
-# MOUNT GRADIO AT ROOT "/"
-# ✅ FIX: Mount onto fastapi_app (not "app") and assign result to "app"
-# "app" is what uvicorn picks up: `uvicorn server.app:app`
-# API endpoints registered above take priority over Gradio routes
-# =============================================================
+
 app = gr.mount_gradio_app(fastapi_app, demo, path="/")
 
 
-# =============================================================
-# ✅ FIX: main() function + __main__ guard — REQUIRED by OpenEnv
-# =============================================================
 def main():
     import uvicorn
-    uvicorn.run(
-        "server.app:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=False,
-    )
+    uvicorn.run("server.app:app", host="0.0.0.0", port=7860, reload=False)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
