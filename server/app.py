@@ -1,5 +1,11 @@
 """
-server/app.py — Docker entry point (port 7860).
+server/app.py — Docker entry point (port 8000).
+
+Gradio UI is mounted at "/" — so when judges click the HF Space App tab,
+they see the full UI immediately.
+
+API endpoints (/reset, /step, /health, /state, /close) are registered on
+FastAPI BEFORE Gradio is mounted, so they take priority over Gradio routes.
 """
 
 import sys
@@ -15,13 +21,16 @@ from pydantic import BaseModel
 
 from env.environment import SQLRepairEnv
 from env.models import Action
-from env.grader import grade
 
+# Two separate env instances
+# api_env → validator (/reset /step /close)
+# ui_env  → Gradio UI button
 api_env = SQLRepairEnv()
 ui_env  = SQLRepairEnv()
+
 episode_history = []
 
-fastapi_app = FastAPI(title="SQL Repair OpenEnv", version="1.0")
+app = FastAPI(title="SQL Repair OpenEnv", version="1.0")
 
 
 def obs_to_dict(obs):
@@ -34,17 +43,16 @@ def obs_to_dict(obs):
     }
 
 
-@fastapi_app.get("/")
-async def root():
-    return {"status": "ok"}
+# =============================================================
+# API ENDPOINTS — registered FIRST so they take priority
+# =============================================================
 
-
-@fastapi_app.get("/health")
+@app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return JSONResponse(status_code=200, content={"status": "ok"})
 
 
-@fastapi_app.post("/reset")
+@app.post("/reset")
 async def reset():
     result = await api_env.reset()
     obs = result["observation"]
@@ -60,7 +68,7 @@ class StepRequest(BaseModel):
     query: str
 
 
-@fastapi_app.post("/step")
+@app.post("/step")
 async def step(body: StepRequest):
     result = await api_env.step(Action(query=body.query))
     obs = result["observation"]
@@ -72,42 +80,21 @@ async def step(body: StepRequest):
     })
 
 
-@fastapi_app.get("/state")
+@app.get("/state")
 async def state():
-    obs = api_env.state()
-    if obs is None:
-        return JSONResponse(status_code=200, content={"state": None})
-    return JSONResponse(status_code=200, content=obs_to_dict(obs))
+    return JSONResponse(status_code=200, content=obs_to_dict(api_env.state()))
 
 
-class GraderRequest(BaseModel):
-    task_id: str = "easy"
-    predicted: str = ""
-    expected_query: str = ""
-    result: object = None
-    expected: object = None
-    error: str = None
-
-
-@fastapi_app.post("/grader")
-async def grader_endpoint(body: GraderRequest):
-    g = grade()
-    score = g.grade(
-        predicted=body.predicted,
-        expected_query=body.expected_query,
-        result=body.result,
-        expected=body.expected,
-        error=body.error,
-    )
-    return JSONResponse(status_code=200, content={
-        "task_id": body.task_id,
-        "score":   score,
-        "reward":  score,
-    })
+@app.post("/close")
+async def close():
+    await api_env.close()
+    return JSONResponse(status_code=200, content={"status": "closed"})
 
 
 # =============================================================
-# GRADIO UI
+# GRADIO UI FUNCTION
+# fix_query imported INSIDE the function — NOT at module level
+# This prevents circular import crash on container startup
 # =============================================================
 
 def run_demo():
@@ -131,8 +118,8 @@ def run_demo():
 
             output_text = f"ERROR: {error}" if error else str(out)
 
-            if reward >= 0.95:
-                reward_label = f"✅ Perfect ({reward:.2f})"
+            if reward == 1.0:
+                reward_label = "✅ Perfect (1.0)"
             elif reward >= 0.8:
                 reward_label = f"🟢 Good ({reward:.2f})"
             elif reward >= 0.3:
@@ -154,7 +141,7 @@ def run_demo():
             table  = "| # | Difficulty | Broken Query | Fixed Query | Reward |\n"
             table += "|---|---|---|---|---|\n"
             for e in reversed(episode_history[-10:]):
-                icon = ("✅" if e["reward"] >= 0.95
+                icon = ("✅" if e["reward"] == 1.0
                         else "🟢" if e["reward"] >= 0.8
                         else "🟡" if e["reward"] >= 0.3
                         else "🔴")
@@ -164,11 +151,16 @@ def run_demo():
                     f"| {icon} {e['reward']:.2f} |\n"
                 )
 
+            status_msg = (
+                f"✅ Episode {len(episode_history)} | "
+                f"Reward: {reward:.2f} | Avg: {avg:.2f}"
+            )
+
             return (
                 broken, schema, fixed, output_text,
                 reward_label, difficulty.upper(),
                 f"{avg:.2f}", str(len(episode_history)),
-                table, f"✅ Episode {len(episode_history)} | Reward: {reward:.2f} | Avg: {avg:.2f}",
+                table, status_msg,
             )
 
         except Exception as e:
@@ -183,10 +175,14 @@ def run_demo():
     return asyncio.run(inner())
 
 
+# =============================================================
+# GRADIO BLOCKS
+# =============================================================
+
 with gr.Blocks(title="🧠 SQL Repair Environment") as demo:
     gr.Markdown("""
     # 🧠 AI SQL Repair Environment
-    > **OpenEnv-compliant** RL environment — AI agent repairs broken SQL and gets scored 0.05→0.95.
+    > **OpenEnv-compliant** RL environment — AI agent repairs broken SQL and gets scored.
     > Difficulty auto-rotates: **Easy → Medium → Hard → Easy...**
     """)
 
@@ -222,10 +218,10 @@ with gr.Blocks(title="🧠 SQL Repair Environment") as demo:
         |---|---|---|
         | `/reset` | POST | Reset env, get new broken query |
         | `/step` | POST `{"query":"..."}` | Submit fixed SQL, get reward |
-        | `/grader` | POST | Score a query directly |
         | `/state` | GET | Current env state |
+        | `/close` | POST | Close environment |
         | `/health` | GET | `{"status": "ok"}` |
-        | `/docs` | GET | Swagger API docs |
+        | `/docs` | GET | Swagger docs |
         """)
 
     btn.click(
@@ -238,14 +234,13 @@ with gr.Blocks(title="🧠 SQL Repair Environment") as demo:
         ],
     )
 
-
-app = gr.mount_gradio_app(fastapi_app, demo, path="/")
-
-
-def main():
-    import uvicorn
-    uvicorn.run("server.app:app", host="0.0.0.0", port=7860, reload=False)
-
+# =============================================================
+# MOUNT GRADIO AT ROOT "/"
+# API endpoints registered above take priority over Gradio
+# So /reset, /step, /health etc. still work correctly
+# Judges see the UI when they click the HF Space App tab
+# =============================================================
+app = gr.mount_gradio_app(app, demo, path="/")
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run(app, host="0.0.0.0", port=7860)
