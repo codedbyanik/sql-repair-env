@@ -1,14 +1,64 @@
-spec_version: v1
-
-app:
-  entrypoint: server.app:app
-
+ spec_version: 1
+name: sql-repair-env
+type: docker
+description: |
+  An OpenEnv-compliant single-agent RL environment where an AI agent repairs
+  broken SQL queries.
+version: "1.0"
+author: anik2411
+runtime:
+  app: server/app.py
+  port: 7860
+entry_point: env.environment:SQLRepairEnv
+tags:
+  - sql
+  - nlp
+  - code-repair
+  - reinforcement-learning
+  - sqlite
+  - text2sql
+observation_space:
+  type: object
+  properties:
+    broken_query:
+      type: string
+    db_schema:
+      type: string
+    difficulty:
+      type: string
+      enum: [easy, medium, hard]
+    result:
+      type: array
+      nullable: true
+    error:
+      type: string
+      nullable: true
+action_space:
+  type: object
+  properties:
+    query:
+      type: string
+reward_range: [0.05, 0.95]
+reward_description: |
+  0.95 — Exact normalized query match
+  0.8  — Output rows match expected result
+  0.3  — Valid SELECT structure but wrong output
+  0.05 — Syntax error or invalid query
 tasks:
   - id: easy
+    name: "Easy SQL Repair"
+    description: "Fix simple SQL syntax errors like missing commas and typos."
     grader: env.grader:grade
-
   - id: medium
+    name: "Medium SQL Repair"
+    description: "Fix incomplete SQL queries with missing WHERE values and ORDER BY."
     grader: env.grader:grade
-
   - id: hard
+    name: "Hard SQL Repair"
+    description: "Fix complex SQL queries with GROUP BY, HAVING, and BETWEEN."
     grader: env.grader:grade
+environment_type: single-agent
+evaluation:
+  episodes: 10
+  metric: average_reward
+  success_threshold: 0.8
